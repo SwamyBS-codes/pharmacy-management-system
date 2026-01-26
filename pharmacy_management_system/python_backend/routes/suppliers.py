@@ -39,20 +39,30 @@ def get_supplier(supplier_id):
 def create_supplier():
     """Create new supplier"""
     try:
-        data = request.get_json()
-        
+        data = request.get_json() or {}
+        name = (data.get('name') or '').strip()
+        if not name:
+            return jsonify({'error': 'Supplier name is required'}), 400
+
+        # Accept both `contact` and `phone` from clients; map to schema `phone`
+        phone = (data.get('phone') or data.get('contact') or '')
+        contact_person = (data.get('contact_person') or '')
+        email = (data.get('email') or '')
+        address = (data.get('address') or '')
+
         query = """
-            INSERT INTO suppliers (name, email, contact, address)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO suppliers (name, contact_person, email, phone, address)
+            VALUES (%s, %s, %s, %s, %s)
             RETURNING *
         """
         params = (
-            data.get('name'),
-            data.get('email'),
-            data.get('contact'),
-            data.get('address')
+            name,
+            contact_person or None,
+            email or None,
+            phone or None,
+            address or None,
         )
-        
+
         supplier = execute_query(query, params, fetch_one=True)
         return jsonify(supplier), 201
     except Exception as e:
@@ -63,13 +73,15 @@ def create_supplier():
 def update_supplier(supplier_id):
     """Update supplier"""
     try:
-        data = request.get_json()
-        
+        data = request.get_json() or {}
+
+        # Accept both `contact` and `phone` and map to `phone`; include `contact_person`
         query = """
             UPDATE suppliers SET
                 name = COALESCE(%s, name),
+                contact_person = COALESCE(%s, contact_person),
                 email = COALESCE(%s, email),
-                contact = COALESCE(%s, contact),
+                phone = COALESCE(%s, phone),
                 address = COALESCE(%s, address),
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
@@ -77,10 +89,11 @@ def update_supplier(supplier_id):
         """
         params = (
             data.get('name'),
+            data.get('contact_person'),
             data.get('email'),
-            data.get('contact'),
+            data.get('phone') or data.get('contact'),
             data.get('address'),
-            supplier_id
+            supplier_id,
         )
         
         supplier = execute_query(query, params, fetch_one=True)

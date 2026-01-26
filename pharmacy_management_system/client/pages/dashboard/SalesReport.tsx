@@ -48,15 +48,16 @@ export default function SalesReport() {
     salesCount: sales.length,
     statsData,
     dailySalesCount: stats.dailySales?.length || 0,
-    topMedicinesCount: stats.topMedicines?.length || 0
+    topMedicinesCount: stats.topMedicines?.length || 0,
+    rawStats: stats
   });
 
   // Calculate sales statistics
   const totalSales = Number(stats.summary?.total_sales || 0);
 
-  // Extract data exactly like AdminDashboard does
-  const dailySales = stats?.dailySales || [];
-  const topMeds = stats?.topMedicines || [];
+  // Extract data from stats
+  const dailySales = Array.isArray(stats?.dailySales) ? stats.dailySales : [];
+  const topMeds = Array.isArray(stats?.topMedicines) ? stats.topMedicines : [];
 
   console.log('Extracted data:', {
     dailySalesLength: dailySales.length,
@@ -73,13 +74,27 @@ export default function SalesReport() {
   // Group sales by month for monthly view
   const monthlySales = sales.reduce((acc: any, sale: any) => {
     if (!sale.created_at) return acc;
-    const date = new Date(sale.created_at);
-    const monthKey = date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-    if (!acc[monthKey]) {
-      acc[monthKey] = { sales: 0, orders: 0 };
+    
+    try {
+      // Parse date - handle both ISO format and RFC 2822 format from PostgreSQL
+      const date = new Date(sale.created_at);
+      
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date:', sale.created_at);
+        return acc;
+      }
+      
+      const monthKey = date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+      if (!acc[monthKey]) {
+        acc[monthKey] = { sales: 0, orders: 0 };
+      }
+      acc[monthKey].sales += Number(sale.final_amount || 0);
+      acc[monthKey].orders += 1;
+    } catch (error) {
+      console.warn('Error parsing date:', sale.created_at, error);
     }
-    acc[monthKey].sales += Number(sale.final_amount || 0);
-    acc[monthKey].orders += 1;
+    
     return acc;
   }, {});
 
@@ -92,6 +107,12 @@ export default function SalesReport() {
     }))
     .sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime())
     .slice(-6); // Last 6 months
+
+  console.log('Monthly data for chart:', {
+    monthlySalesObject: monthlySales,
+    monthlyDataArray: monthlyData,
+    monthlyDataLength: monthlyData.length
+  });
 
   // Calculate monthly average sales
   const totalMonthlySales = monthlyData.reduce((sum: number, month: any) => sum + Number(month.sales || 0), 0);
@@ -216,8 +237,19 @@ export default function SalesReport() {
 
                   {(() => {
                     const maxSales = Math.max(...monthlyData.map((d: any) => Number(d.sales || 0)));
+                    
+                    // Handle case when maxSales is 0
+                    if (maxSales === 0) {
+                      return (
+                        <text x="300" y="120" textAnchor="middle" fill="#94a3b8" fontSize="14">
+                          No sales recorded
+                        </text>
+                      );
+                    }
+                    
                     const points = monthlyData.map((data: any, idx: number) => {
-                      const x = (idx / (monthlyData.length - 1)) * 600;
+                      // Handle single data point
+                      const x = monthlyData.length === 1 ? 300 : (idx / (monthlyData.length - 1)) * 600;
                       const y = 240 - ((Number(data.sales) / maxSales) * 220);
                       return { x, y, data };
                     });
@@ -226,7 +258,7 @@ export default function SalesReport() {
                       `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`
                     ).join(' ');
 
-                    const areaD = `${pathD} L 600 240 L 0 240 Z`;
+                    const areaD = `${pathD} L ${points[points.length - 1].x} 240 L ${points[0].x} 240 Z`;
 
                     return (
                       <>

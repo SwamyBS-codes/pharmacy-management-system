@@ -30,6 +30,8 @@ import {
   ScanLine,
   Brain,
 } from "lucide-react";
+import GlassBrain from "@/components/GlassBrain";
+import BackgroundPharmaScene from "@/components/BackgroundPharmaScene";
 
 export default function AdminDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -108,7 +110,8 @@ export default function AdminDashboard() {
 
 
   return (
-    <div className="min-h-screen bg-slate-100 flex">
+    <div className="min-h-screen bg-slate-100 flex relative overflow-hidden">
+      <BackgroundPharmaScene className="absolute inset-0 -z-10 opacity-[0.85]" />
       {/* Sidebar */}
       <aside
         className={`${sidebarOpen ? "w-64" : "w-20"
@@ -192,6 +195,26 @@ export default function AdminDashboard() {
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
             <p className="text-slate-600 mt-1">Welcome back to PharmaCare</p>
+          </div>
+
+          {/* 3D Glassy Brain Animation */}
+          <div className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center">
+              <div className="space-y-2">
+                <h3 className="font-semibold text-slate-900">AI Insights Preview</h3>
+                <p className="text-sm text-slate-600">
+                  Interactive 3D visualization showcasing neural intelligence powering predictions.
+                </p>
+                <Link to="/dashboard/predictions">
+                  <Button className="mt-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white">
+                    Explore Predictions
+                  </Button>
+                </Link>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-2">
+              <GlassBrain className="h-[280px] w-full" />
+            </div>
           </div>
 
           {/* Stats Grid */}

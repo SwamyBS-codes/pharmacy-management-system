@@ -432,17 +432,19 @@ export default function Medicines() {
                       <td className="px-6 py-4 text-sm text-slate-900">
                         ₹{Number(medicine.price || 0).toFixed(2)}
                       </td>
-                      <td className="px-6 py-4 text-sm">
+                      <td className=" px-6 py-4 text-sm">
+                       
                         <span
-                          className={`px-5 py-1 rounded-full text-xs font-semibold ${medicine.stock > 100
-                              ? "bg-emerald-100 text-emerald-700"
+                          className={`flex text-center px-6 py-1 w-full rounded-full text-xs font-semibold ${medicine.stock > 100
+                              ? "text-emerald-700"
                               : medicine.stock > 50
                                 ? "bg-yellow-100 text-yellow-700"
-                                : "bg-red-100 text-red-700"
+                                : ""
                             }`}
                         >
-                          {medicine.stock || 0} units
+                          {medicine.stock || 0} Units
                         </span>
+                       
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-600">
                         {medicine.category || "N/A"}

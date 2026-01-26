@@ -33,7 +33,7 @@ def get_sales():
                    u.name as sold_by_name
             FROM sales s
             LEFT JOIN customers c ON s.customer_id = c.id
-            LEFT JOIN users u ON s.sold_by = u.id
+            LEFT JOIN users u ON s.generated_by_user_id = u.id
             WHERE 1=1
         """
         count_query = "SELECT COUNT(*) as count FROM sales WHERE 1=1"
@@ -87,7 +87,7 @@ def get_sale(sale_id):
                    u.name as sold_by_name
             FROM sales s
             LEFT JOIN customers c ON s.customer_id = c.id
-            LEFT JOIN users u ON s.sold_by = u.id
+            LEFT JOIN users u ON s.generated_by_user_id = u.id
             WHERE s.id = %s
         """
         sale = execute_query(sale_query, (sale_id,), fetch_one=True)
@@ -120,34 +120,36 @@ def create_sale():
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=extras.RealDictCursor)
         
-        # Calculate totals
-        total_amount = sum(float(item['unit_price']) * int(item['quantity']) for item in items)
-        tax_amount = total_amount * 0.10  # 10% tax
-        discount_amount = float(data.get('discount_amount', 0))
-        final_amount = total_amount + tax_amount - discount_amount
+        # Calculate totals (schema: subtotal, tax, discount, final_amount)
+        subtotal = sum(float(item['unit_price']) * int(item['quantity']) for item in items)
+        tax = subtotal * 0.10  # 10% tax
+        discount = float(data.get('discount_amount', 0))
+        final_amount = subtotal + tax - discount
         
         # Generate invoice number
         invoice_number = generate_invoice_number()
         
+        # Get pharmacy_id from user context (first pharmacy or from request)
+        pharmacy_id = data.get('pharmacy_id', 1)  # Default to first pharmacy
+        
         # Create sale record
         sale_query = """
             INSERT INTO sales (
-                customer_id, invoice_number, total_amount, tax_amount, discount_amount,
-                final_amount, payment_method, payment_status, sold_by, notes
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                pharmacy_id, customer_id, invoice_number, subtotal, tax, discount,
+                final_amount, payment_method, generated_by_user_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING *
         """
         sale_params = (
+            pharmacy_id,
             data.get('customer_id'),
             invoice_number,
-            total_amount,
-            tax_amount,
-            discount_amount,
+            subtotal,
+            tax,
+            discount,
             final_amount,
             data.get('payment_method', 'cash'),
-            data.get('payment_status', 'paid'),
-            data.get('sold_by', 1),
-            data.get('notes')
+            data.get('sold_by', 1)
         )
         
         cursor.execute(sale_query, sale_params)
@@ -158,18 +160,16 @@ def create_sale():
             # Insert sale item
             item_query = """
                 INSERT INTO sales_items (
-                    sale_id, medicine_id, medicine_name, quantity, unit_price, total_price, batch_id, expiry_date
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    sale_id, medicine_id, inventory_id, quantity, unit_price, total_price
+                ) VALUES (%s, %s, %s, %s, %s, %s)
             """
             item_params = (
                 sale['id'],
                 item['medicine_id'],
-                item['medicine_name'],
+                item.get('inventory_id'),
                 item['quantity'],
                 item['unit_price'],
-                item['unit_price'] * item['quantity'],
-                item.get('batch_id'),
-                item.get('expiry_date')
+                float(item['unit_price']) * int(item['quantity'])
             )
             cursor.execute(item_query, item_params)
             
@@ -186,17 +186,7 @@ def create_sale():
                     (item['quantity'], item['medicine_id'], item['batch_id'])
                 )
         
-        # Update customer stats if customer_id provided
-        if data.get('customer_id'):
-            cursor.execute(
-                """UPDATE customers SET 
-                   total_purchases = total_purchases + %s,
-                   last_purchase_date = CURRENT_DATE,
-                   loyalty_points = loyalty_points + FLOOR(%s / 100),
-                   updated_at = CURRENT_TIMESTAMP
-                   WHERE id = %s""",
-                (final_amount, final_amount, data['customer_id'])
-            )
+        # Note: Skipping customer stats update since schema does not include these columns
         
         conn.commit()
         
@@ -279,13 +269,14 @@ def get_sales_stats():
         
         # Top selling medicines
         top_query = f"""
-            SELECT si.medicine_id, si.medicine_name,
+            SELECT si.medicine_id, m.medicine_name,
                    SUM(si.quantity) as total_quantity,
                    SUM(si.total_price) as total_revenue
             FROM sales_items si
             JOIN sales s ON si.sale_id = s.id
+            JOIN medicines m ON si.medicine_id = m.id
             {date_filter_join if date_filter_join else 'WHERE 1=1'}
-            GROUP BY si.medicine_id, si.medicine_name
+            GROUP BY si.medicine_id, m.medicine_name
             ORDER BY total_quantity DESC
             LIMIT 10
         """

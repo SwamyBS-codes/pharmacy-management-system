@@ -26,6 +26,9 @@ class Config:
     PORT = int(os.getenv('PYTHON_PORT', '5000'))
     HOST = os.getenv('HOST', '0.0.0.0')
     
+    # Admin setup key for secure bootstrap/reset actions (dev-only)
+    ADMIN_SETUP_KEY = os.getenv('ADMIN_SETUP_KEY')
+    
     @staticmethod
     def get_db_connection_string():
         """Get PostgreSQL connection string"""

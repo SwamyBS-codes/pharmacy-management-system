@@ -98,27 +98,42 @@ def create_customer():
         
         if not data.get('name'):
             return jsonify({'error': 'Customer name is required'}), 400
-        
+        # Normalize and validate optional fields
+        name = str(data.get('name')).strip()
+        email = (str(data.get('email')).strip() or None) if data.get('email') else None
+        phone = (str(data.get('phone')).strip() or None) if data.get('phone') else None
+        address = (str(data.get('address')).strip() or None) if data.get('address') else None
+        dob = data.get('date_of_birth') or None  # Expecting 'YYYY-MM-DD' or None
+
+        # Basic email format check (optional)
+        if email and ('@' not in email or '.' not in email):
+            return jsonify({'error': 'Please provide a valid email address'}), 400
+
+        # Basic phone normalization (optional)
+        if phone and len(phone) < 6:
+            return jsonify({'error': 'Please provide a valid phone number'}), 400
+
+        # IMPORTANT: Align columns with DB schema (no gender column)
         query = """
-            INSERT INTO customers (name, email, phone, address, date_of_birth, gender)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            INSERT INTO customers (name, email, phone, address, date_of_birth)
+            VALUES (%s, %s, %s, %s, %s)
             RETURNING *
         """
         params = (
-            data.get('name'),
-            data.get('email'),
-            data.get('phone'),
-            data.get('address'),
-            data.get('date_of_birth'),
-            data.get('gender')
+            name,
+            email,
+            phone,
+            address,
+            dob
         )
         
         customer = execute_query(query, params, fetch_one=True)
         return jsonify(customer), 201
     except Exception as e:
         logger.error(f"Error creating customer: {e}")
-        if 'duplicate key' in str(e).lower():
-            return jsonify({'error': 'Customer with this email or phone already exists'}), 400
+        # Surface common constraint errors more clearly
+        if 'duplicate key' in str(e).lower() or 'unique' in str(e).lower():
+            return jsonify({'error': 'Customer with this email or phone already exists'}), 409
         return jsonify({'error': 'Failed to create customer', 'details': str(e)}), 500
 
 @customers_bp.route('/<int:customer_id>', methods=['PUT'])

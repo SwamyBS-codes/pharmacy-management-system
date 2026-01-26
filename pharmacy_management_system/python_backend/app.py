@@ -3,6 +3,7 @@ Main Flask Application
 Pharmacy Management System Backend
 """
 from flask import Flask, jsonify
+import os
 from flask_cors import CORS
 from config import Config
 from db import init_db_pool
@@ -20,12 +21,22 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
     
-    # Enable CORS with proper configuration
+    # Enable CORS with proper configuration (support localhost, 127.0.0.1, and configurable origins)
+    default_origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5175",
+        "http://127.0.0.1:5175",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ]
+    extra_origins = os.getenv('CORS_ORIGINS', '')
+    origin_list = default_origins + [o.strip() for o in extra_origins.split(',') if o.strip()]
     CORS(app, resources={
         r"/api/*": {
-            "origins": ["http://localhost:5173", "http://localhost:3000"],
+            "origins": origin_list,
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"],
+            "allow_headers": ["Origin", "Content-Type", "Authorization", "X-Requested-With"],
             "supports_credentials": True
         }
     })

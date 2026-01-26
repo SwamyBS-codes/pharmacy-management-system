@@ -31,12 +31,13 @@ INVOICES_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'invoice
 os.makedirs(INVOICES_DIR, exist_ok=True)
 
 
-def generate_invoice_pdf(sale_data):
+def generate_invoice_pdf(sale_data, pharmacy_data=None):
     """
     Generate a professional PDF invoice for a sale
     
     Args:
         sale_data: Dictionary containing sale information and items
+        pharmacy_data: Dictionary containing pharmacy information
         
     Returns:
         BytesIO object containing the PDF data
@@ -79,12 +80,17 @@ def generate_invoice_pdf(sale_data):
     elements.append(Paragraph("PHARMACY INVOICE", title_style))
     elements.append(Spacer(1, 0.2*inch))
     
-    # Company Information
+    # Company Information - use pharmacy_data if available
+    pharmacy_name = pharmacy_data.get('pharmacy_name', 'Pharmacy') if pharmacy_data else 'Pharmacy'
+    pharmacy_address = pharmacy_data.get('address', 'Address not provided') if pharmacy_data else 'Address not provided'
+    pharmacy_phone = pharmacy_data.get('phone', 'N/A') if pharmacy_data else 'N/A'
+    pharmacy_gst = pharmacy_data.get('gst_number', 'N/A') if pharmacy_data else 'N/A'
+    
     company_info = f"""
-    <b>PharmaAI Management System</b><br/>
-    123 Medical Street, Healthcare District<br/>
-    Phone: +91 1234567890 | Email: info@pharmaai.com<br/>
-    GSTIN: 29ABCDE1234F1Z5
+    <b>{pharmacy_name}</b><br/>
+    Address: {pharmacy_address}<br/>
+    Phone: {pharmacy_phone}<br/>
+    GSTIN: {pharmacy_gst}
     """
     elements.append(Paragraph(company_info, normal_style))
     elements.append(Spacer(1, 0.3*inch))
@@ -96,14 +102,14 @@ def generate_invoice_pdf(sale_data):
         ['Invoice Number:', sale_data.get('invoice_number', 'N/A')],
         ['Invoice Date:', invoice_date],
         ['Payment Method:', sale_data.get('payment_method', 'Cash').upper()],
-        ['Payment Status:', sale_data.get('payment_status', 'Paid').upper()],
+        ['Payment Status:', 'PAID'],
     ]
     
     customer_details_data = [
         ['Customer Name:', sale_data.get('customer_name', 'Walk-in Customer')],
         ['Phone:', sale_data.get('customer_phone', 'N/A')],
-        ['', ''],
-        ['', ''],
+        ['Doctor Name:', sale_data.get('doctor_name', 'N/A')],
+        ['Prescription ID:', str(sale_data.get('prescription_id', 'N/A'))],
     ]
     
     # Create two-column layout for invoice and customer details
@@ -132,18 +138,20 @@ def generate_invoice_pdf(sale_data):
     elements.append(Spacer(1, 0.1*inch))
     
     # Items table
-    items_data = [['#', 'Medicine Name', 'Quantity', 'Unit Price', 'Total']]
-    
+    items_data = [['#', 'Medicine', 'Batch', 'Expiry', 'Qty', 'Unit Price', 'Total']]
+
     for idx, item in enumerate(sale_data.get('items', []), 1):
         items_data.append([
             str(idx),
             str(item.get('medicine_name', 'N/A')),
+            str(item.get('batch_id', '—')),
+            str(item.get('expiry_date', '—')),
             str(item.get('quantity', 0)),
             f"₹{float(item.get('unit_price', 0)):.2f}",
             f"₹{float(item.get('total_price', 0)):.2f}"
         ])
-    
-    items_table = Table(items_data, colWidths=[0.5*inch, 3.5*inch, 1*inch, 1.2*inch, 1.3*inch])
+
+    items_table = Table(items_data, colWidths=[0.4*inch, 2.8*inch, 0.9*inch, 1.0*inch, 0.8*inch, 1.1*inch, 1.2*inch])
     items_table.setStyle(TableStyle([
         # Header row
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#059669')),
@@ -170,9 +178,9 @@ def generate_invoice_pdf(sale_data):
     elements.append(Spacer(1, 0.3*inch))
     
     # Totals section
-    subtotal = float(sale_data.get('total_amount', 0))
-    tax = float(sale_data.get('tax_amount', 0))
-    discount = float(sale_data.get('discount_amount', 0))
+    subtotal = float(sale_data.get('subtotal', 0))
+    tax = float(sale_data.get('tax', 0))
+    discount = float(sale_data.get('discount', 0))
     final_total = float(sale_data.get('final_amount', 0))
     
     totals_data = [
@@ -229,13 +237,19 @@ def generate_invoice_pdf(sale_data):
 def generate_invoice(sale_id):
     """Generate PDF invoice for a sale"""
     try:
+        # Fetch pharmacy details
+        pharmacy_query = "SELECT * FROM pharmacy LIMIT 1"
+        pharmacy = execute_query(pharmacy_query, fetch_one=True)
+        
         # Fetch sale data with items
         sale_query = """
-            SELECT s.*, c.name as customer_name, c.phone as customer_phone,
-                   u.name as sold_by_name
+            SELECT s.*, c.name as customer_name, c.phone as customer_phone, c.id as customer_id,
+                   u.name as sold_by_name, o.doctor_name, p.id as prescription_id
             FROM sales s
             LEFT JOIN customers c ON s.customer_id = c.id
-            LEFT JOIN users u ON s.sold_by = u.id
+            LEFT JOIN users u ON s.generated_by_user_id = u.id
+            LEFT JOIN orders o ON c.id = o.customer_id
+            LEFT JOIN prescriptions p ON c.id = p.customer_id
             WHERE s.id = %s
         """
         sale = execute_query(sale_query, (sale_id,), fetch_one=True)
@@ -244,14 +258,21 @@ def generate_invoice(sale_id):
             return jsonify({'error': 'Sale not found'}), 404
         
         # Fetch sale items
-        items_query = "SELECT * FROM sales_items WHERE sale_id = %s"
+        items_query = """
+            SELECT si.*, m.medicine_name,
+                   inv.batch_id, inv.expiry_date
+            FROM sales_items si
+            LEFT JOIN medicines m ON si.medicine_id = m.id
+            LEFT JOIN inventory inv ON si.inventory_id = inv.id
+            WHERE si.sale_id = %s
+        """
         items = execute_query(items_query, (sale_id,))
         
         sale_data = dict(sale)
         sale_data['items'] = items
         
-        # Generate PDF
-        pdf_buffer = generate_invoice_pdf(sale_data)
+        # Generate PDF with pharmacy data
+        pdf_buffer = generate_invoice_pdf(sale_data, pharmacy_data=pharmacy)
         
         # Save PDF to file
         invoice_filename = f"invoice_{sale_data['invoice_number']}.pdf"
@@ -291,22 +312,37 @@ def get_invoice(sale_id):
         
         # If invoice doesn't exist, generate it
         if not os.path.exists(invoice_path):
+            # Fetch pharmacy details
+            pharmacy_query = "SELECT * FROM pharmacy LIMIT 1"
+            pharmacy = execute_query(pharmacy_query, fetch_one=True)
+            
             # Fetch complete sale data
             sale_query = """
-                SELECT s.*, c.name as customer_name, c.phone as customer_phone,
-                       u.name as sold_by_name
+                SELECT s.*, c.name as customer_name, c.phone as customer_phone, c.id as customer_id,
+                       u.name as sold_by_name, o.doctor_name, p.id as prescription_id
                 FROM sales s
                 LEFT JOIN customers c ON s.customer_id = c.id
-                LEFT JOIN users u ON s.sold_by = u.id
+                LEFT JOIN users u ON s.generated_by_user_id = u.id
+                LEFT JOIN orders o ON c.id = o.customer_id
+                LEFT JOIN prescriptions p ON c.id = p.customer_id
                 WHERE s.id = %s
             """
             sale_data = execute_query(sale_query, (sale_id,), fetch_one=True)
-            items = execute_query("SELECT * FROM sales_items WHERE sale_id = %s", (sale_id,))
+            items = execute_query(
+                """
+                SELECT si.*, m.medicine_name, inv.batch_id, inv.expiry_date
+                FROM sales_items si
+                LEFT JOIN medicines m ON si.medicine_id = m.id
+                LEFT JOIN inventory inv ON si.inventory_id = inv.id
+                WHERE si.sale_id = %s
+                """,
+                (sale_id,)
+            )
             
             sale_dict = dict(sale_data)
             sale_dict['items'] = items
             
-            pdf_buffer = generate_invoice_pdf(sale_dict)
+            pdf_buffer = generate_invoice_pdf(sale_dict, pharmacy_data=pharmacy)
             
             with open(invoice_path, 'wb') as f:
                 f.write(pdf_buffer.getvalue())
@@ -340,9 +376,9 @@ def list_invoices():
         end_date = request.args.get('endDate', '')
         
         query = """
-            SELECT s.id, s.invoice_number, s.total_amount, s.tax_amount, 
-                   s.discount_amount, s.final_amount, s.payment_method, 
-                   s.payment_status, s.created_at,
+            SELECT s.id, s.invoice_number, s.subtotal, s.tax, 
+                   s.discount, s.final_amount, s.payment_method, 
+                   s.created_at,
                    c.name as customer_name, c.phone as customer_phone
             FROM sales s
             LEFT JOIN customers c ON s.customer_id = c.id
@@ -409,7 +445,7 @@ def preview_invoice(sale_id):
                    u.name as sold_by_name
             FROM sales s
             LEFT JOIN customers c ON s.customer_id = c.id
-            LEFT JOIN users u ON s.sold_by = u.id
+            LEFT JOIN users u ON s.generated_by_user_id = u.id
             WHERE s.id = %s
         """
         sale = execute_query(sale_query, (sale_id,), fetch_one=True)
@@ -417,7 +453,16 @@ def preview_invoice(sale_id):
         if not sale:
             return jsonify({'error': 'Sale not found'}), 404
         
-        items = execute_query("SELECT * FROM sales_items WHERE sale_id = %s", (sale_id,))
+        items = execute_query(
+            """
+            SELECT si.*, m.medicine_name, inv.batch_id, inv.expiry_date
+            FROM sales_items si
+            LEFT JOIN medicines m ON si.medicine_id = m.id
+            LEFT JOIN inventory inv ON si.inventory_id = inv.id
+            WHERE si.sale_id = %s
+            """,
+            (sale_id,)
+        )
         
         result = dict(sale)
         result['items'] = items

@@ -19,9 +19,9 @@ print("=" * 80)
 print("\n[1/6] Loading Generated Data...")
 
 try:
-    medicine_df = pd.read_csv('../data/Medicine_Details_Categorized.csv')
-    historical_sales = pd.read_csv('../data/historical_sales.csv')
-    weather_df = pd.read_csv('../data/weather_data.csv')
+    medicine_df = pd.read_csv('Medicine_Details_Categorized.csv')
+    historical_sales = pd.read_csv('historical_sales.csv')
+    weather_df = pd.read_csv('weather_data.csv')
     print(f"✅ Loaded Medicine Data: {len(medicine_df):,} records")
     print(f"✅ Loaded Sales Data: {len(historical_sales):,} records")
     print(f"✅ Loaded Weather Data: {len(weather_df):,} records")

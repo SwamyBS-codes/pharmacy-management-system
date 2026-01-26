@@ -40,20 +40,23 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_single_pharmacy ON pharmacy ((1));
 -- First, check if users table exists and backup if needed
 DO $$
 BEGIN
-    -- Add new columns if they don't exist
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                   WHERE table_name='users' AND column_name='pharmacy_id') THEN
-        ALTER TABLE users ADD COLUMN pharmacy_id INTEGER REFERENCES pharmacy(id) ON DELETE CASCADE;
-    END IF;
-    
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                   WHERE table_name='users' AND column_name='role') THEN
-        ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'EMPLOYEE' CHECK (role IN ('ADMIN', 'EMPLOYEE'));
-    END IF;
-    
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                   WHERE table_name='users' AND column_name='is_active') THEN
-        ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE;
+    -- Only attempt to alter if the users table already exists
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='users') THEN
+        -- Add new columns if they don't exist
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                       WHERE table_name='users' AND column_name='pharmacy_id') THEN
+            ALTER TABLE users ADD COLUMN pharmacy_id INTEGER REFERENCES pharmacy(id) ON DELETE CASCADE;
+        END IF;
+        
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                       WHERE table_name='users' AND column_name='role') THEN
+            ALTER TABLE users ADD COLUMN role VARCHAR(20) DEFAULT 'EMPLOYEE' CHECK (role IN ('ADMIN', 'EMPLOYEE'));
+        END IF;
+        
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                       WHERE table_name='users' AND column_name='is_active') THEN
+            ALTER TABLE users ADD COLUMN is_active BOOLEAN DEFAULT TRUE;
+        END IF;
     END IF;
 END $$;
 
@@ -204,14 +207,16 @@ CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 -- =====================================================
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                   WHERE table_name='sales' AND column_name='pharmacy_id') THEN
-        ALTER TABLE sales ADD COLUMN pharmacy_id INTEGER REFERENCES pharmacy(id) ON DELETE CASCADE;
-    END IF;
-    
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
-                   WHERE table_name='sales' AND column_name='generated_by_user_id') THEN
-        ALTER TABLE sales ADD COLUMN generated_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+    IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name='sales') THEN
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                       WHERE table_name='sales' AND column_name='pharmacy_id') THEN
+            ALTER TABLE sales ADD COLUMN pharmacy_id INTEGER REFERENCES pharmacy(id) ON DELETE CASCADE;
+        END IF;
+        
+        IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                       WHERE table_name='sales' AND column_name='generated_by_user_id') THEN
+            ALTER TABLE sales ADD COLUMN generated_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+        END IF;
     END IF;
 END $$;
 

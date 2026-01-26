@@ -18,23 +18,26 @@ import { useToast } from "@/components/ui/use-toast";
 interface Supplier {
   id: number;
   name: string;
-  email: string;
-  contact: string;
-  address: string;
+  email?: string;
+  phone?: string;
+  contact_person?: string;
+  address?: string;
   created_at: string;
 }
 
 interface SupplierFormData {
   name: string;
   email: string;
-  contact: string;
+  phone: string;
+  contact_person: string;
   address: string;
 }
 
 const initialFormData: SupplierFormData = {
   name: "",
   email: "",
-  contact: "",
+  phone: "",
+  contact_person: "",
   address: "",
 };
 
@@ -44,13 +47,11 @@ const validateForm = (data: SupplierFormData): string[] => {
   if (!data.name.trim()) {
     errors.push("Supplier name is required");
   }
-  if (!data.email.trim()) {
-    errors.push("Email is required");
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
+  if (data.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) {
     errors.push("Please enter a valid email address");
   }
-  if (!data.contact.trim()) {
-    errors.push("Contact number is required");
+  if (!data.phone.trim()) {
+    errors.push("Phone number is required");
   }
   if (!data.address.trim()) {
     errors.push("Address is required");
@@ -81,7 +82,13 @@ export default function Suppliers() {
       const response = await fetch("/api/suppliers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          name: data.name,
+          email: data.email || undefined,
+          phone: data.phone,
+          contact_person: data.contact_person || undefined,
+          address: data.address,
+        }),
       });
       if (!response.ok) throw new Error("Failed to create supplier");
       return response.json();
@@ -110,7 +117,13 @@ export default function Suppliers() {
       const response = await fetch(`/api/suppliers/${editingId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          name: data.name,
+          email: data.email || undefined,
+          phone: data.phone,
+          contact_person: data.contact_person || undefined,
+          address: data.address,
+        }),
       });
       if (!response.ok) throw new Error("Failed to update supplier");
       return response.json();
@@ -177,9 +190,10 @@ export default function Suppliers() {
     setEditingId(supplier.id);
     setFormData({
       name: supplier.name,
-      email: supplier.email,
-      contact: supplier.contact,
-      address: supplier.address,
+      email: supplier.email || "",
+      phone: supplier.phone || "",
+      contact_person: supplier.contact_person || "",
+      address: supplier.address || "",
     });
     setValidationErrors([]);
     setIsDialogOpen(true);
@@ -281,7 +295,10 @@ export default function Suppliers() {
                     Email
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-900">
-                    Contact
+                    Phone
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-slate-900">
+                    Contact Person
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-semibold text-slate-900">
                     Address
@@ -311,7 +328,10 @@ export default function Suppliers() {
                         {supplier.email || "N/A"}
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-600">
-                        {supplier.contact || "N/A"}
+                        {supplier.phone || "N/A"}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-slate-600">
+                        {supplier.contact_person || "N/A"}
                       </td>
                       <td className="px-6 py-4 text-sm text-slate-600">
                         {supplier.address || "N/A"}
@@ -380,10 +400,10 @@ export default function Suppliers() {
               />
             </div>
 
-            {/* Email */}
+            {/* Email (optional) */}
             <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-medium">
-                Email *
+                Email
               </Label>
               <Input
                 id="email"
@@ -396,17 +416,32 @@ export default function Suppliers() {
               />
             </div>
 
-            {/* Contact */}
+            {/* Phone */}
             <div className="space-y-2">
-              <Label htmlFor="contact" className="text-sm font-medium">
-                Contact Number *
+              <Label htmlFor="phone" className="text-sm font-medium">
+                Phone Number *
               </Label>
               <Input
-                id="contact"
-                name="contact"
-                value={formData.contact}
+                id="phone"
+                name="phone"
+                value={formData.phone}
                 onChange={handleInputChange}
-                placeholder="Enter contact number"
+                placeholder="Enter phone number"
+                className="border-slate-200"
+              />
+            </div>
+
+            {/* Contact Person */}
+            <div className="space-y-2">
+              <Label htmlFor="contact_person" className="text-sm font-medium">
+                Contact Person
+              </Label>
+              <Input
+                id="contact_person"
+                name="contact_person"
+                value={formData.contact_person}
+                onChange={handleInputChange}
+                placeholder="Enter contact person (optional)"
                 className="border-slate-200"
               />
             </div>

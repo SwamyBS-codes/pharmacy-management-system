@@ -33,25 +33,53 @@ export default function Login() {
         return;
       }
 
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        setError("Please enter a valid email address");
+        setLoading(false);
+        return;
+      }
+
+      console.log("Attempting login with:", formData.email);
+
       // Login via API
       const { api } = await import("@/lib/api");
       const response = await api.auth.login({
-        email: formData.email,
+        email: formData.email.trim(),
         password: formData.password,
       });
+
+      console.log("Login response:", response.data);
+
+      if (!response.data.token || !response.data.user) {
+        setError("Invalid response from server");
+        setLoading(false);
+        return;
+      }
 
       // Store token and user data
       localStorage.setItem("auth_token", response.data.token);
       localStorage.setItem("user", JSON.stringify(response.data.user));
 
-      // Force redirect using window.location for reliability
-      if (!response.data.user.is_profile_complete) {
-        window.location.href = "/complete-profile";
-      } else {
-        window.location.href = "/dashboard";
-      }
+      console.log("Login successful, redirecting...");
+
+      // Use window.location for reliable redirect
+      setTimeout(() => {
+        if (!response.data.user.is_profile_complete) {
+          window.location.href = "/complete-profile";
+        } else {
+          window.location.href = "/dashboard";
+        }
+      }, 100);
     } catch (err: any) {
-      setError(err.response?.data?.error || "Login failed. Please try again.");
+      console.error("Login error:", err);
+      const errorMessage =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        err.message ||
+        "Login failed. Please check your email and password.";
+      setError(errorMessage);
       setLoading(false);
     }
   };

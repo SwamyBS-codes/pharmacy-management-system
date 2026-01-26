@@ -40,6 +40,14 @@ export default function Signup() {
         return;
       }
 
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        setError("Please enter a valid email address");
+        setLoading(false);
+        return;
+      }
+
       if (formData.password !== formData.confirmPassword) {
         setError("Passwords do not match");
         setLoading(false);
@@ -52,6 +60,8 @@ export default function Signup() {
         return;
       }
 
+      console.log("Checking if pharmacy exists...");
+
       // Check if pharmacy already exists
       const { api } = await import("@/lib/api");
       const checkResponse = await api.auth.checkPharmacy();
@@ -59,24 +69,48 @@ export default function Signup() {
       if (checkResponse.data.exists) {
         setError("A pharmacy is already registered. Only one pharmacy allowed per system.");
         setLoading(false);
+        // Redirect to login since registration is blocked
+        setTimeout(() => {
+          navigate("/login", { replace: true });
+        }, 1000);
         return;
       }
 
+      console.log("Registering new pharmacy...");
+
       // Register pharmacy
       const response = await api.auth.registerPharmacy({
-        pharmacy_name: formData.pharmacyName,
-        email: formData.email,
+        pharmacy_name: formData.pharmacyName.trim(),
+        email: formData.email.trim(),
         password: formData.password,
       });
+
+      console.log("Registration response:", response.data);
+
+      if (!response.data.token || !response.data.user) {
+        setError("Invalid response from server");
+        setLoading(false);
+        return;
+      }
 
       // Store token and user data
       localStorage.setItem("auth_token", response.data.token);
       localStorage.setItem("user", JSON.stringify(response.data.user));
 
-      // Force redirect using window.location for reliability
-      window.location.href = "/complete-profile";
+      console.log("Registration successful, redirecting...");
+
+      // Use window.location for reliable redirect
+      setTimeout(() => {
+        window.location.href = "/complete-profile";
+      }, 100);
     } catch (err: any) {
-      setError(err.response?.data?.error || "Registration failed. Please try again.");
+      console.error("Registration error:", err);
+      const errorMessage =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        err.message ||
+        "Registration failed. Please try again.";
+      setError(errorMessage);
       setLoading(false);
     }
   };

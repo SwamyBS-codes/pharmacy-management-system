@@ -61,7 +61,7 @@ def get_expired_drugs():
 
 @inventory_bp.route('/out-of-stock', methods=['GET'])
 def get_out_of_stock():
-    """Get out of stock items"""
+    """Get out of stock items (falls back to medicine stock when inventory quantity is missing/zero)"""
     try:
         query = """
             SELECT 
@@ -69,11 +69,12 @@ def get_out_of_stock():
                 m.medicine_name,
                 m.manufacturer,
                 s.name as supplier_name,
-                s.email as supplier_email
+                s.email as supplier_email,
+                COALESCE(NULLIF(i.quantity, 0), m.stock, 0) AS available_quantity
             FROM inventory i
             LEFT JOIN medicines m ON i.medicine_id = m.id
             LEFT JOIN suppliers s ON i.supplier_id = s.id
-            WHERE i.quantity <= 0
+            WHERE COALESCE(NULLIF(i.quantity, 0), m.stock, 0) <= 0
             ORDER BY m.medicine_name
         """
         out_of_stock = execute_query(query)

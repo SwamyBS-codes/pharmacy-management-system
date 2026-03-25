@@ -6,6 +6,7 @@ from flask import Blueprint, request, jsonify
 from db import execute_query, get_db_connection, release_db_connection
 from psycopg2 import extras
 import logging
+from middleware import require_role
 
 logger = logging.getLogger(__name__)
 inventory_bp = Blueprint('inventory', __name__)
@@ -61,20 +62,24 @@ def get_expired_drugs():
 
 @inventory_bp.route('/out-of-stock', methods=['GET'])
 def get_out_of_stock():
-    """Get out of stock items (falls back to medicine stock when inventory quantity is missing/zero)"""
+    """Get out of stock items (checks medicine stock - primary source of truth)"""
     try:
         query = """
             SELECT 
-                i.*,
+                m.id as id,
+                m.id as medicine_id,
                 m.medicine_name,
                 m.manufacturer,
                 s.name as supplier_name,
                 s.email as supplier_email,
-                COALESCE(NULLIF(i.quantity, 0), m.stock, 0) AS available_quantity
-            FROM inventory i
-            LEFT JOIN medicines m ON i.medicine_id = m.id
+                i.batch_id,
+                i.expiry_date,
+                COALESCE(m.stock, 0) as quantity,
+                COALESCE(m.price, 0) as price
+            FROM medicines m
+            LEFT JOIN inventory i ON i.medicine_id = m.id AND i.quantity > 0
             LEFT JOIN suppliers s ON i.supplier_id = s.id
-            WHERE COALESCE(NULLIF(i.quantity, 0), m.stock, 0) <= 0
+            WHERE m.stock <= 0
             ORDER BY m.medicine_name
         """
         out_of_stock = execute_query(query)
@@ -134,6 +139,7 @@ def get_reorder_suggestions():
         return jsonify({'error': 'Failed to fetch reorder suggestions'}), 500
 
 @inventory_bp.route('/', methods=['POST'])
+@require_role('ADMIN')
 def create_inventory_item():
     """Create new inventory batch and update medicine stock"""
     conn = None
@@ -144,7 +150,12 @@ def create_inventory_item():
             return jsonify({'error': 'Medicine ID and quantity are required'}), 400
         
         medicine_id = data.get('medicine_id')
-        quantity = int(data.get('quantity'))
+        try:
+            quantity = int(data.get('quantity'))
+            if quantity <= 0:
+                return jsonify({'error': 'Quantity must be a positive value (greater than 0)'}), 400
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Quantity must be a valid positive number'}), 400
         batch_id = data.get('batch_id')
         expiry_date = data.get('expiry_date')
         
@@ -212,10 +223,20 @@ def create_inventory_item():
             release_db_connection(conn)
 
 @inventory_bp.route('/<int:inventory_id>', methods=['PUT'])
+@require_role('ADMIN')
 def update_inventory_item(inventory_id):
     """Update inventory item"""
     try:
         data = request.get_json()
+        
+        # Validate quantity is positive if provided
+        if 'quantity' in data and data['quantity'] is not None:
+            try:
+                quantity = int(data['quantity'])
+                if quantity < 0:
+                    return jsonify({'error': 'Quantity must be a positive value (0 or greater)'}), 400
+            except (ValueError, TypeError):
+                return jsonify({'error': 'Quantity must be a valid number'}), 400
         
         query = """
             UPDATE inventory SET
@@ -248,6 +269,7 @@ def update_inventory_item(inventory_id):
         return jsonify({'error': 'Failed to update inventory item'}), 500
 
 @inventory_bp.route('/<int:inventory_id>', methods=['DELETE'])
+@require_role('ADMIN')
 def delete_inventory_item(inventory_id):
     """Delete inventory item"""
     try:

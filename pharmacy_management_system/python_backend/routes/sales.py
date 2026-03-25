@@ -8,6 +8,7 @@ from psycopg2 import extras
 import logging
 from datetime import datetime
 import random
+from middleware import require_auth
 
 logger = logging.getLogger(__name__)
 sales_bp = Blueprint('sales', __name__)
@@ -107,6 +108,7 @@ def get_sale(sale_id):
         return jsonify({'error': 'Failed to fetch sale', 'details': str(e)}), 500
 
 @sales_bp.route('/', methods=['POST'])
+@require_auth
 def create_sale():
     """Create new sale (POS checkout)"""
     conn = None
@@ -129,8 +131,11 @@ def create_sale():
         # Generate invoice number
         invoice_number = generate_invoice_number()
         
-        # Get pharmacy_id from user context (first pharmacy or from request)
-        pharmacy_id = data.get('pharmacy_id', 1)  # Default to first pharmacy
+        # Get pharmacy_id from authenticated user
+        user = request.current_user
+        pharmacy_id = user.get('pharmacy_id')
+        if not pharmacy_id:
+            return jsonify({'error': 'User is not linked to a pharmacy'}), 400
         
         # Create sale record
         sale_query = """
@@ -149,7 +154,7 @@ def create_sale():
             discount,
             final_amount,
             data.get('payment_method', 'cash'),
-            data.get('sold_by', 1)
+            user.get('id')
         )
         
         cursor.execute(sale_query, sale_params)
@@ -227,6 +232,8 @@ def get_sales_stats():
         start_date = request.args.get('startDate', '')
         end_date = request.args.get('endDate', '')
         
+        logger.info(f"Fetching sales stats - startDate: {start_date}, endDate: {end_date}")
+        
         # Date filter for single-table queries (sales table)
         date_filter = ""
         # Date filter for join queries (with table alias 's')
@@ -281,6 +288,12 @@ def get_sales_stats():
             LIMIT 10
         """
         top_medicines = execute_query(top_query, tuple(params) if params else None)
+        
+        logger.info(f"Sales stats response - dailySales count: {len(daily_sales or [])}, topMedicines count: {len(top_medicines or [])}")
+        
+        # Log sample data for debugging
+        if daily_sales:
+            logger.debug(f"First daily sale: {daily_sales[0]}")
         
         return jsonify({
             'summary': total_stats,

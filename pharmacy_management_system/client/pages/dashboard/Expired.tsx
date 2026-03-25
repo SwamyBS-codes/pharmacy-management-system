@@ -17,6 +17,13 @@ interface ExpiredDrug {
 }
 
 export default function Expired() {
+  // Get user role from localStorage
+  const userRole = (() => {
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    return user.role;
+  })();
+  const isAdmin = userRole === "ADMIN";
+
   const { data: expiredDrugs, isLoading, error, refetch } = useQuery<ExpiredDrug[]>({
     queryKey: ["expired-drugs"],
     queryFn: async () => {
@@ -139,13 +146,15 @@ export default function Expired() {
                         ₹{Number(drug.price || 0).toFixed(2)}
                       </td>
                       <td className="px-6 py-4 text-sm">
-                        <button
-                          onClick={() => handleDelete(drug.id)}
-                          className="p-2 hover:bg-red-100 rounded-lg transition text-red-600"
-                          title="Remove from inventory"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {isAdmin && (
+                          <button
+                            onClick={() => handleDelete(drug.id)}
+                            className="p-2 hover:bg-red-100 rounded-lg transition text-red-600"
+                            title="Remove from inventory"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))

@@ -106,6 +106,13 @@ export default function Medicines() {
 
   const queryClient = useQueryClient();
 
+  // Get user role from localStorage
+  const userRole = (() => {
+    const user = JSON.parse(localStorage.getItem("user") || "{}");
+    return user.role;
+  })();
+  const isAdmin = userRole === "ADMIN";
+
   // Fetch manufacturers list
   const { data: manufacturersData } = useQuery<string[]>({
     queryKey: ["manufacturers"],
@@ -149,16 +156,25 @@ export default function Medicines() {
     mutationFn: async (newMedicine: Partial<Medicine>) => {
       const response = await fetch("/api/medicines", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("auth_token") || ""}`,
+        },
         body: JSON.stringify(newMedicine),
       });
-      if (!response.ok) throw new Error("Failed to create medicine");
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to create medicine");
+      }
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["medicines"] });
       setIsDialogOpen(false);
       resetForm();
+    },
+    onError: (error: any) => {
+      alert(`Error: ${error.message}`);
     },
   });
 
@@ -167,10 +183,16 @@ export default function Medicines() {
     mutationFn: async ({ id, data }: { id: number; data: Partial<Medicine> }) => {
       const response = await fetch(`/api/medicines/${id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("auth_token") || ""}`,
+        },
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error("Failed to update medicine");
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update medicine");
+      }
       return response.json();
     },
     onSuccess: () => {
@@ -179,6 +201,9 @@ export default function Medicines() {
       setEditingMedicine(null);
       resetForm();
     },
+    onError: (error: any) => {
+      alert(`Error: ${error.message}`);
+    },
   });
 
   // Delete medicine mutation
@@ -186,12 +211,21 @@ export default function Medicines() {
     mutationFn: async (id: number) => {
       const response = await fetch(`/api/medicines/${id}`, {
         method: "DELETE",
+        headers: { 
+          "Authorization": `Bearer ${localStorage.getItem("auth_token") || ""}`,
+        },
       });
-      if (!response.ok) throw new Error("Failed to delete medicine");
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to delete medicine");
+      }
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["medicines"] });
+    },
+    onError: (error: any) => {
+      alert(`Error: ${error.message}`);
     },
   });
 
@@ -302,13 +336,15 @@ export default function Medicines() {
                 {selectedManufacturer && ` from ${selectedManufacturer}`}
               </p>
             </div>
-            <Button
-              onClick={() => handleOpenDialog()}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Medicine
-            </Button>
+            {isAdmin && (
+              <Button
+                onClick={() => handleOpenDialog()}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Medicine
+              </Button>
+            )}
           </div>
 
           {/* Filters */}
@@ -450,18 +486,22 @@ export default function Medicines() {
                         {medicine.category || "N/A"}
                       </td>
                       <td className="px-6 py-4 text-sm space-x-2 flex">
-                        <button
-                          onClick={() => handleOpenDialog(medicine)}
-                          className="p-2 hover:bg-blue-100 rounded-lg transition text-blue-600"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(medicine.id)}
-                          className="p-2 hover:bg-red-100 rounded-lg transition text-red-600"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {isAdmin && (
+                          <>
+                            <button
+                              onClick={() => handleOpenDialog(medicine)}
+                              className="p-2 hover:bg-blue-100 rounded-lg transition text-blue-600"
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(medicine.id)}
+                              className="p-2 hover:bg-red-100 rounded-lg transition text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -587,8 +627,17 @@ export default function Medicines() {
                 <Input
                   id="stock"
                   type="number"
+                  min="0"
+                  step="1"
                   value={formData.stock}
-                  onChange={(e) => setFormData({ ...formData, stock: e.target.value })}
+                  onChange={(e) => {
+                    let value = e.target.value;
+                    // Allow empty string for clearing, but ensure positive when filled
+                    if (value && parseInt(value) < 0) {
+                      value = "0";
+                    }
+                    setFormData({ ...formData, stock: value });
+                  }}
                 />
               </div>
               <div className="col-span-2">

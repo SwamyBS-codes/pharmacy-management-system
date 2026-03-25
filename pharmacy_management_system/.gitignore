@@ -27,3 +27,8 @@ dist-ssr
 .config/
 !.env
 
+# Supabase deployment files
+.env.supabase
+supabase_migration/
+python_backend/supabase_migration/
+

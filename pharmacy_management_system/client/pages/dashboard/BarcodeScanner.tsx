@@ -74,22 +74,66 @@ export default function BarcodeScanner() {
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [cameras, setCameras] = useState<{ id: string; label: string }[]>([]);
   const [selectedCamera, setSelectedCamera] = useState<string>("");
+  const [cameraError, setCameraError] = useState<string>("");
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [isSecureContext, setIsSecureContext] = useState(true);
   const inputRef = useRef<HTMLInputElement>(null);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
 
   // Get available cameras
   useEffect(() => {
-    Html5Qrcode.getCameras()
-      .then((devices) => {
+    const getCameras = async () => {
+      try {
+        setPermissionDenied(false);
+        setCameraError("");
+
+        const secure = window.isSecureContext || window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+        setIsSecureContext(secure);
+
+        if (!secure) {
+          setCameraError("Camera access requires HTTPS or localhost. Please use a secure URL.");
+          return;
+        }
+
+        // First check if mediaDevices is supported
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          setCameraError("Camera access not supported in this browser. Use Chrome, Firefox, or Edge.");
+          return;
+        }
+
+        // Request camera permission first
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          stream.getTracks().forEach((track) => track.stop());
+        } catch (permErr: any) {
+          if (permErr.name === 'NotAllowedError' || permErr.name === 'PermissionDeniedError') {
+            setPermissionDenied(true);
+            setCameraError("Camera permission denied. Please allow camera access in your browser settings.");
+            return;
+          }
+        }
+
+        const devices = await Html5Qrcode.getCameras();
         if (devices && devices.length) {
           setCameras(devices.map(d => ({ id: d.id, label: d.label || `Camera ${d.id}` })));
           setSelectedCamera(devices[0].id);
+          setCameraError("");
+        } else {
+          setCameraError("No cameras found. Please connect a camera and refresh.");
         }
-      })
-      .catch((err) => {
+      } catch (err: any) {
         console.error("Error getting cameras:", err);
-      });
-  }, []);
+        setCameraError(`Failed to access cameras: ${err.message || 'Unknown error'}`);
+      }
+    };
+
+    if (scanMode === "webcam") {
+      getCameras();
+    } else {
+      setCameraError("");
+      setPermissionDenied(false);
+    }
+  }, [scanMode]);
 
   // Focus input on mount for USB scanning
   useEffect(() => {
@@ -142,9 +186,24 @@ export default function BarcodeScanner() {
   });
 
   const startWebcamScanning = async () => {
-    if (!selectedCamera) return;
+    if (!isSecureContext) {
+      setCameraError("Camera access requires HTTPS or localhost. Please use a secure URL.");
+      return;
+    }
+
+    if (!selectedCamera) {
+      setCameraError("Please select a camera first.");
+      return;
+    }
+
+    setCameraError("");
 
     try {
+      // Check if already scanning
+      if (html5QrCodeRef.current) {
+        await stopWebcamScanning();
+      }
+
       const html5QrCode = new Html5Qrcode("qr-reader", {
         verbose: false,
         experimentalFeatures: { useBarCodeDetectorIfSupported: true },
@@ -173,14 +232,30 @@ export default function BarcodeScanner() {
           stopWebcamScanning();
         },
         (errorMessage) => {
-          // Silently ignore scanning errors
+          // Silently ignore scanning errors during normal operation
         }
       );
 
       setIsCameraActive(true);
-    } catch (err) {
+      setCameraError("");
+    } catch (err: any) {
       console.error("Error starting camera:", err);
-      alert("Failed to start camera. Please check permissions.");
+      let errorMsg = "Failed to start camera. ";
+      
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        errorMsg += "Camera permission denied. Please allow camera access in browser settings.";
+        setPermissionDenied(true);
+      } else if (err.name === 'NotFoundError') {
+        errorMsg += "No camera found. Please connect a camera.";
+      } else if (err.name === 'NotReadableError') {
+        errorMsg += "Camera is already in use by another application.";
+      } else if (err.name === 'SecurityError') {
+        errorMsg += "Camera access blocked due to security settings. Try using HTTPS.";
+      } else {
+        errorMsg += err.message || "Unknown error occurred.";
+      }
+      
+      setCameraError(errorMsg);
     }
   };
 
@@ -333,18 +408,41 @@ export default function BarcodeScanner() {
                 </div>
               </div>
 
-              <Select value={selectedCamera} onValueChange={setSelectedCamera} disabled={isCameraActive}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a camera" />
-                </SelectTrigger>
-                <SelectContent>
-                  {cameras.map((camera) => (
-                    <SelectItem key={camera.id} value={camera.id}>
-                      {camera.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {cameraError && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-red-800">{cameraError}</p>
+                      {permissionDenied && (
+                        <div className="mt-2 text-xs text-red-700">
+                          <p className="font-semibold">How to enable camera:</p>
+                          <ul className="list-disc list-inside mt-1 space-y-1">
+                            <li>Click the camera icon in your browser's address bar</li>
+                            <li>Select "Allow" or "Always allow"</li>
+                            <li>Refresh this page</li>
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {cameras.length > 0 && (
+                <Select value={selectedCamera} onValueChange={setSelectedCamera} disabled={isCameraActive}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Select a camera" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {cameras.map((camera) => (
+                      <SelectItem key={camera.id} value={camera.id}>
+                        {camera.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
 
               <div id="qr-reader" className="w-full max-w-md mx-auto"></div>
 

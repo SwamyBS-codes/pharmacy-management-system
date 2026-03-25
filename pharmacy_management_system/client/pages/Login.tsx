@@ -3,9 +3,11 @@ import { Button } from "@/components/ui/button";
 import Header from "@/components/Header";
 import { Link, useNavigate } from "react-router-dom";
 import { Eye, EyeOff } from "lucide-react";
+import { useAuth } from "@/lib/AuthContext";
 
 export default function Login() {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -43,40 +45,23 @@ export default function Login() {
 
       console.log("Attempting login with:", formData.email);
 
-      // Login via API
-      const { api } = await import("@/lib/api");
-      const response = await api.auth.login({
-        email: formData.email.trim(),
-        password: formData.password,
-      });
-
-      console.log("Login response:", response.data);
-
-      if (!response.data.token || !response.data.user) {
-        setError("Invalid response from server");
-        setLoading(false);
-        return;
-      }
-
-      // Store token and user data
-      localStorage.setItem("auth_token", response.data.token);
-      localStorage.setItem("user", JSON.stringify(response.data.user));
+      // Use AuthContext login function
+      await login(formData.email.trim().toLowerCase(), formData.password);
 
       console.log("Login successful, redirecting...");
 
-      // Use window.location for reliable redirect
-      setTimeout(() => {
-        if (!response.data.user.is_profile_complete) {
-          window.location.href = "/complete-profile";
-        } else {
-          window.location.href = "/dashboard";
-        }
-      }, 100);
+      // Check profile completion from localStorage
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      
+      // Navigate based on profile completion
+      if (!user.is_profile_complete) {
+        navigate("/complete-profile", { replace: true });
+      } else {
+        navigate("/dashboard", { replace: true });
+      }
     } catch (err: any) {
       console.error("Login error:", err);
       const errorMessage =
-        err.response?.data?.error ||
-        err.response?.data?.message ||
         err.message ||
         "Login failed. Please check your email and password.";
       setError(errorMessage);
@@ -175,6 +160,9 @@ export default function Login() {
                     )}
                   </button>
                 </div>
+                <p className="text-xs text-slate-500 mt-2">
+                  💡 Password is case-sensitive. Use the exact same uppercase and lowercase letters as when you registered.
+                </p>
               </div>
 
               {/* Remember & Forgot */}

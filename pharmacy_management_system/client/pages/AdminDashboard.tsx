@@ -94,19 +94,52 @@ export default function AdminDashboard() {
   const monthlySales = stats?.sales?.thisMonth?.amount || 0;
 
   // Fetch sales stats for charts
-  const { data: salesStats } = useQuery({
+  const { data: salesStats, isLoading: isLoadingSalesStats, refetch: refetchSalesStats } = useQuery({
     queryKey: ["sales-stats-dashboard"],
     queryFn: async () => {
+      console.log("📡 Fetching sales stats from API...");
       const response = await api.sales.getStatsSummary();
+      console.log("📊 Sales stats received:", {
+        dailySalesCount: response.data?.dailySales?.length,
+        topMedsCount: response.data?.topMedicines?.length,
+        firstDailySale: response.data?.dailySales?.[0]
+      });
       return response.data;
     },
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnMount: "stale",
+    enabled: true,
   });
 
   const dailyData = salesStats?.dailySales || [];
   const topMeds = salesStats?.topMedicines?.slice(0, 5) || [];
 
-  // Get today's sales (most recent day in dailyData)
-  const todaySales = dailyData.length > 0 ? Number(dailyData[0]?.sales || 0) : 0;
+  // Get today's sales - find the entry that matches today's date
+  const todayStr = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+  const todayData = dailyData.find((day: any) => {
+    const dayStr = new Date(day.date).toISOString().split('T')[0];
+    return dayStr === todayStr;
+  });
+  const todaySales = todayData ? Number(todayData.sales || 0) : 0;
+
+  // Log when data changes
+  console.log("💾 AdminDashboard data updated:", {
+    todayStr: todayStr,
+    dailySalesCount: dailyData.length,
+    firstDailySale: dailyData[0],
+    todayData: todayData,
+    todaySales: todaySales,
+    topMedsCount: topMeds.length
+  });
+
+  // Force re-render when salesStats changes
+  useEffect(() => {
+    console.log("🔄 useEffect: Sales stats changed, component will re-render");
+    return () => {
+      console.log("🔄 useEffect cleanup");
+    };
+  }, [salesStats, dailyData, todaySales]);
 
 
   return (
@@ -233,13 +266,13 @@ export default function AdminDashboard() {
             />
             <StatCard
               label="Daily Selling"
-              value={todaySales > 1000 ? `₹${(todaySales / 1000).toFixed(1)}K` : `₹${todaySales.toLocaleString()}`}
+              value={todaySales > 10000 ? `₹${(todaySales / 1000).toFixed(1)}K` : `₹${todaySales.toLocaleString()}`}
               icon="ShoppingCart"
               color="purple"
             />
             <StatCard
               label="Monthly Sales"
-              value={monthlySales > 1000 ? `₹${(monthlySales / 1000).toFixed(1)}K` : `₹${monthlySales.toLocaleString()}`}
+              value={monthlySales > 10000 ? `₹${(monthlySales / 1000).toFixed(1)}K` : `₹${monthlySales.toLocaleString()}`}
               icon="BarChart3"
               color="orange"
             />

@@ -12,8 +12,8 @@ const apiClient = axios.create({
     headers: {
         'Content-Type': 'application/json',
     },
-    // Align with backend CORS config (supports_credentials)
-    withCredentials: true,
+    // Use JWT tokens in Authorization header, not cookies
+    withCredentials: false,
 });
 
 // Request interceptor - attach JWT token

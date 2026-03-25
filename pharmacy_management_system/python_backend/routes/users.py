@@ -4,6 +4,7 @@ Handles user management with authentication and role-based access control
 """
 from flask import Blueprint, request, jsonify
 from db import execute_query
+from validators import validate_indian_mobile, validate_age_18_plus
 import bcrypt
 import logging
 from middleware import require_auth, require_role
@@ -72,6 +73,23 @@ def create_user():
         if len(data['password']) < 8:
             return jsonify({'error': 'Password must be at least 8 characters'}), 400
         
+        # Validate email format
+        email = str(data.get('email')).strip().lower()
+        if '@' not in email or '.' not in email:
+            return jsonify({'error': 'Please provide a valid email address'}), 400
+        
+        # Validate phone if provided
+        if data.get('phone'):
+            is_valid, error = validate_indian_mobile(data['phone'])
+            if not is_valid:
+                return jsonify({'error': error}), 400
+        
+        # Validate DOB if provided
+        if data.get('date_of_birth'):
+            is_valid, error = validate_age_18_plus(data['date_of_birth'])
+            if not is_valid:
+                return jsonify({'error': error}), 400
+        
         # Hash password
         hashed_password = hash_password(data['password'])
         
@@ -98,7 +116,7 @@ def create_user():
         params = (
             current_user['pharmacy_id'],
             data['name'],
-            data['email'],
+            email,
             hashed_password,
             role,
             data.get('status', 'active'),

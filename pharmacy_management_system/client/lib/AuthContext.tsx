@@ -50,13 +50,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             const storedUser = localStorage.getItem('user');
 
             if (storedToken && storedUser) {
-                setToken(storedToken);
                 try {
-                    // Verify token is still valid
-                    const response = await api.auth.getCurrentUser();
-                    setUser(response.data);
-                } catch (error) {
-                    // Token invalid, clear storage
+                    const parsedUser = JSON.parse(storedUser);
+                    setToken(storedToken);
+                    setUser(parsedUser);
+                    
+                    // Verify token is still valid by calling the API
+                    try {
+                        const response = await api.auth.getCurrentUser();
+                        setUser(response.data);
+                    } catch (error) {
+                        // Token invalid, clear storage
+                        console.log('Token validation failed, clearing auth state');
+                        localStorage.removeItem('auth_token');
+                        localStorage.removeItem('user');
+                        setToken(null);
+                        setUser(null);
+                    }
+                } catch (parseError) {
+                    // Invalid stored data, clear it
+                    console.error('Failed to parse stored user data:', parseError);
                     localStorage.removeItem('auth_token');
                     localStorage.removeItem('user');
                     setToken(null);

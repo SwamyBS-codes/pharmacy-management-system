@@ -4,6 +4,7 @@ Handles customer management and purchase history
 """
 from flask import Blueprint, request, jsonify
 from db import execute_query
+from validators import validate_customer_data, validate_indian_mobile, validate_age_18_plus
 import logging
 
 logger = logging.getLogger(__name__)
@@ -92,26 +93,30 @@ def get_customer(customer_id):
 
 @customers_bp.route('/', methods=['POST'])
 def create_customer():
-    """Create new customer"""
+    """Create new customer with validation for Indian mobile and age (18+)"""
     try:
         data = request.get_json()
         
         if not data.get('name'):
             return jsonify({'error': 'Customer name is required'}), 400
-        # Normalize and validate optional fields
+        
+        # Normalize and validate fields
         name = str(data.get('name')).strip()
         email = (str(data.get('email')).strip() or None) if data.get('email') else None
         phone = (str(data.get('phone')).strip() or None) if data.get('phone') else None
         address = (str(data.get('address')).strip() or None) if data.get('address') else None
         dob = data.get('date_of_birth') or None  # Expecting 'YYYY-MM-DD' or None
 
-        # Basic email format check (optional)
-        if email and ('@' not in email or '.' not in email):
-            return jsonify({'error': 'Please provide a valid email address'}), 400
-
-        # Basic phone normalization (optional)
-        if phone and len(phone) < 6:
-            return jsonify({'error': 'Please provide a valid phone number'}), 400
+        # Validate customer data
+        is_valid, error_message = validate_customer_data({
+            'name': name,
+            'email': email,
+            'phone': phone,
+            'date_of_birth': dob
+        })
+        
+        if not is_valid:
+            return jsonify({'error': error_message}), 400
 
         # IMPORTANT: Align columns with DB schema (no gender column)
         query = """
@@ -138,9 +143,24 @@ def create_customer():
 
 @customers_bp.route('/<int:customer_id>', methods=['PUT'])
 def update_customer(customer_id):
-    """Update customer"""
+    """Update customer with validation"""
     try:
         data = request.get_json()
+        
+        # Validate fields if they are being updated
+        if data.get('phone'):
+            is_valid, error = validate_indian_mobile(data['phone'])
+            if not is_valid:
+                return jsonify({'error': error}), 400
+        
+        if data.get('date_of_birth'):
+            is_valid, error = validate_age_18_plus(data['date_of_birth'])
+            if not is_valid:
+                return jsonify({'error': error}), 400
+        
+        if data.get('email'):
+            if '@' not in data['email'] or '.' not in data['email']:
+                return jsonify({'error': 'Please provide a valid email address'}), 400
         
         allowed_fields = ['name', 'email', 'phone', 'address', 'date_of_birth', 'gender']
         update_fields = []

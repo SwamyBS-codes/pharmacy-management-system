@@ -252,43 +252,51 @@ def get_reorder_recommendations():
     if not load_model_and_data():
         # Return mock reorder recommendations from inventory
         try:
-            query = """
-                SELECT i.id, i.batch_id, m.medicine_name, m.id as medicine_id, m.category,
-                       i.quantity, COALESCE(avg_monthly_sales.avg_qty, 5) as estimated_monthly_demand,
-                       i.price, s.supplier_name
-                FROM inventory i
-                JOIN medicines m ON i.medicine_id = m.id
-                JOIN suppliers s ON i.supplier_id = s.id
-                LEFT JOIN (
-                    SELECT medicine_id, AVG(quantity) as avg_qty 
-                    FROM sales_items 
-                    GROUP BY medicine_id
-                ) avg_monthly_sales ON m.id = avg_monthly_sales.medicine_id
-                WHERE i.quantity < (COALESCE(avg_monthly_sales.avg_qty, 5) * 1.5)
-                ORDER BY (i.quantity / COALESCE(avg_monthly_sales.avg_qty, 5)) ASC
-                LIMIT 15
+            # Base medicines list
+            meds_query = """
+                SELECT id as medicine_id, medicine_name, category, COALESCE(stock, 0) as current_stock
+                FROM medicines
+                ORDER BY medicine_name
             """
-            results = execute_query(query)
-            
+            medicines = execute_query(meds_query)
+
+            # Average daily sales over last 30 days
+            sales_query = """
+                SELECT si.medicine_id, COALESCE(SUM(si.quantity), 0) as qty_30
+                FROM sales_items si
+                JOIN sales s ON s.id = si.sale_id
+                WHERE s.created_at >= CURRENT_DATE - INTERVAL '30 days'
+                GROUP BY si.medicine_id
+            """
+            sales_rows = execute_query(sales_query)
+            sales_map = {row['medicine_id']: float(row['qty_30'] or 0) for row in sales_rows}
+
             recommendations = []
-            for r in results:
-                avg_daily = (r['estimated_monthly_demand'] or 5) / 30
-                days_stock = (r['quantity'] or 0) / avg_daily if avg_daily > 0 else 999
-                
+            for med in medicines:
+                qty_30 = sales_map.get(med['medicine_id'], 0.0)
+                avg_daily = qty_30 / 30 if qty_30 > 0 else 0.0
+                current_stock = int(med['current_stock'] or 0)
+                days_stock = (current_stock / avg_daily) if avg_daily > 0 else 999
+
+                status = 'Urgent' if days_stock < 14 else ('Warning' if days_stock < 30 else 'OK')
+                recommended_qty = 0
+                if days_stock < 30:
+                    recommended_qty = max(int((avg_daily * 30) * 1.2), 50) if avg_daily > 0 else 50
+
                 recommendations.append({
-                    'batch_id': r['batch_id'],
-                    'medicine_id': r['medicine_id'],
-                    'medicine_name': r['medicine_name'],
-                    'category': r['category'] or 'Other',
-                    'current_stock': int(r['quantity'] or 0),
+                    'medicine_id': med['medicine_id'],
+                    'medicine_name': med['medicine_name'],
+                    'category': med['category'] or 'Other',
+                    'current_stock': current_stock,
                     'avg_daily_sales': round(avg_daily, 1),
                     'days_remaining': round(days_stock, 1),
-                    'status': 'Urgent' if days_stock < 14 else ('Warning' if days_stock < 30 else 'OK'),
-                    'recommended_qty': max(int((r['estimated_monthly_demand'] or 5) * 1.2), 50),
-                    'supplier': r['supplier_name']
+                    'status': status,
+                    'recommended_qty': recommended_qty
                 })
-            
-            return jsonify(sorted(recommendations, key=lambda x: x['days_remaining']))
+
+            # Show most critical first
+            recommendations.sort(key=lambda x: (0 if x['status'] == 'Urgent' else 1 if x['status'] == 'Warning' else 2, x['days_remaining']))
+            return jsonify(recommendations)
         except Exception as e:
             logger.error(f"Error generating reorder-recommendations fallback: {e}")
             return jsonify({'error': 'Failed to fetch reorder recommendations'}), 500

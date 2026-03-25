@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { validateCustomerForm } from "@/lib/validation";
 
 interface Customer {
   id: number;
@@ -156,8 +157,19 @@ export default function Customers() {
   };
 
   const handleSubmit = () => {
-    if (!formData.name) {
-      toast.error("Customer name is required");
+    // Validate form data
+    const validation = validateCustomerForm({
+      name: formData.name,
+      email: formData.email,
+      phone: formData.phone,
+      date_of_birth: formData.date_of_birth,
+    });
+
+    if (!validation.valid) {
+      // Show all validation errors
+      validation.errors.forEach((error) => {
+        toast.error(error);
+      });
       return;
     }
 
@@ -314,8 +326,12 @@ export default function Customers() {
                 <Input
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  placeholder="Phone number"
+                  placeholder="Enter Indian mobile number (10 digits)"
+                  title="Must be a valid Indian mobile number (10 digits, starting with 6-9)"
                 />
+                <p className="text-xs text-slate-500">
+                  Format: 10-digit Indian mobile number (e.g., 9876543210 or +91-9876543210)
+                </p>
               </div>
               <div className="space-y-2">
                 <Label>Email</Label>
@@ -341,7 +357,11 @@ export default function Customers() {
                     type="date"
                     value={formData.date_of_birth}
                     onChange={(e) => setFormData({ ...formData, date_of_birth: e.target.value })}
+                    title="Customer must be 18 years or older"
                   />
+                  <p className="text-xs text-slate-500">
+                    Must be 18+ years old
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label>Gender</Label>

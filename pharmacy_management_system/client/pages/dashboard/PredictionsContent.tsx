@@ -183,7 +183,10 @@ export default function PredictionsContent() {
     const accuracy = 94.5;
 
     const handleExportCSV = () => {
-        if (!reorderData) return;
+        if (!reorderData || reorderData.length === 0) {
+            alert("No reorder recommendations to export yet.");
+            return;
+        }
         const headers = ["Medicine Name", "Category", "Current Stock", "Avg Daily Sales", "Days Remaining", "Status", "Recommended Qty"];
         const csvContent = [
             headers.join(","),
@@ -193,11 +196,46 @@ export default function PredictionsContent() {
         ].join("\n");
 
         const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
+        link.href = url;
         link.download = `stock_predictions_${new Date().toISOString().split('T')[0]}.csv`;
+        link.style.display = "none";
+        document.body.appendChild(link);
         link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
     };
+
+    const trendData = (() => {
+        const trend = analyticsData?.trend || [];
+        if (!trend.length) return [];
+
+        const periodDays = Math.max(parseInt(salesPeriod, 10) || 30, 1);
+        const end = new Date();
+        const start = new Date();
+        start.setDate(end.getDate() - (periodDays - 1));
+
+        const trendMap = new Map<string, SalesAnalytics['trend'][number]>();
+        trend.forEach((t) => {
+            const key = new Date(t.date).toISOString().split("T")[0];
+            trendMap.set(key, t);
+        });
+
+        const result: SalesAnalytics['trend'] = [];
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const key = d.toISOString().split("T")[0];
+            const found = trendMap.get(key);
+            result.push({
+                date: key,
+                revenue: found?.revenue || 0,
+                transactions: found?.transactions || 0,
+                avg_order_value: found?.avg_order_value || 0,
+            });
+        }
+
+        return result;
+    })();
 
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
@@ -427,10 +465,14 @@ export default function PredictionsContent() {
                     <CardContent>
                         {isLoadingAnalytics ? (
                             <Skeleton className="h-[250px] w-full" />
+                        ) : trendData.length < 2 ? (
+                            <div className="h-[250px] flex items-center justify-center text-slate-500">
+                                Not enough data to show a trend yet
+                            </div>
                         ) : (
                             <div className="h-[250px]">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={analyticsData?.trend}>
+                                    <LineChart data={trendData}>
                                         <CartesianGrid strokeDasharray="3 3" vertical={false} />
                                         <XAxis
                                             dataKey="date"

@@ -28,6 +28,7 @@ import Settings from "./pages/dashboard/Settings";
 import BarcodeScanner from "./pages/dashboard/BarcodeScanner";
 import Customers from "./pages/dashboard/Customers";
 import PredictionsDashboard from "./pages/dashboard/PredictionsDashboard";
+import DailySalesDebug from "./pages/DailySalesDebug";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -155,6 +156,14 @@ const router = createBrowserRouter(
       element: (
         <ProtectedRoute>
           <PredictionsDashboard />
+        </ProtectedRoute>
+      ),
+    },
+    {
+      path: "/dashboard/daily-sales-debug",
+      element: (
+        <ProtectedRoute>
+          <DailySalesDebug />
         </ProtectedRoute>
       ),
     },

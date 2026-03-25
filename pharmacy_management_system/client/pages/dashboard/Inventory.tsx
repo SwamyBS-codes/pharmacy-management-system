@@ -26,6 +26,7 @@ interface InventoryItem {
   expiry_date: string;
   manufacturing_date?: string;
   price: number;
+  supplier_id?: number;
   status: "normal" | "low" | "out_of_stock" | "expired";
 }
 
@@ -122,10 +123,16 @@ export default function Inventory() {
     mutationFn: async (data: AddStockFormData) => {
       const response = await fetch("/api/inventory", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("auth_token") || ""}`,
+        },
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error("Failed to add stock");
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to add stock");
+      }
       return response.json();
     },
     onSuccess: (data) => {
@@ -144,7 +151,7 @@ export default function Inventory() {
         price: "",
         manufacturing_date: "",
         expiry_date: "",
-        supplier_id: "1",
+        supplier_id: "",
       });
       setSearchTerm("");
       toast({
@@ -167,15 +174,22 @@ export default function Inventory() {
     mutationFn: async ({ id, data }: { id: number; data: Partial<AddStockFormData> }) => {
       const response = await fetch(`/api/inventory/${id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${localStorage.getItem("auth_token") || ""}`,
+        },
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error("Failed to update inventory");
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to update inventory");
+      }
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
       queryClient.invalidateQueries({ queryKey: ["medicines"] });
+      setIsAddStockOpen(false);
       setIsEditMode(false);
       setEditingItem(null);
       setFormData({
@@ -185,8 +199,10 @@ export default function Inventory() {
         price: "",
         manufacturing_date: "",
         expiry_date: "",
-        supplier_id: "1",
+        supplier_id: "",
       });
+      setSearchTerm("");
+      setShowMedicineDropdown(false);
       toast({
         title: "Success",
         description: "Inventory updated successfully",
@@ -205,8 +221,14 @@ export default function Inventory() {
     mutationFn: async (id: number) => {
       const response = await fetch(`/api/inventory/${id}`, {
         method: "DELETE",
+        headers: {
+          "Authorization": `Bearer ${localStorage.getItem("auth_token") || ""}`,
+        },
       });
-      if (!response.ok) throw new Error("Failed to delete inventory");
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to delete inventory");
+      }
       return response.json();
     },
     onSuccess: () => {
@@ -231,7 +253,15 @@ export default function Inventory() {
   const handleAddStock = (e: React.FormEvent) => {
     e.preventDefault();
     if (isEditMode && editingItem) {
-      updateInventoryMutation.mutate({ id: editingItem.id, data: formData });
+      // For updates, only send fields that can be updated
+      const updateData = {
+        batch_id: formData.batch_id,
+        quantity: formData.quantity,
+        price: formData.price,
+        expiry_date: formData.expiry_date,
+        supplier_id: formData.supplier_id,
+      };
+      updateInventoryMutation.mutate({ id: editingItem.id, data: updateData });
     } else {
       addStockMutation.mutate(formData);
     }
@@ -241,14 +271,16 @@ export default function Inventory() {
     setIsEditMode(true);
     setEditingItem(item);
     setFormData({
-      medicine_id: item.medicine_id.toString(),
-      batch_id: item.batch_id,
-      quantity: item.quantity.toString(),
-      price: item.price.toString(),
+      medicine_id: item.medicine_id ? item.medicine_id.toString() : "",
+      batch_id: item.batch_id || "",
+      quantity: item.quantity ? item.quantity.toString() : "",
+      price: item.price ? item.price.toString() : "",
       manufacturing_date: item.manufacturing_date || "",
-      expiry_date: item.expiry_date,
-      supplier_id: "1",
+      expiry_date: item.expiry_date || "",
+      supplier_id: item.supplier_id ? item.supplier_id.toString() : "1",
     });
+    setSearchTerm("");
+    setShowMedicineDropdown(false);
     setIsAddStockOpen(true);
   };
 
@@ -513,7 +545,25 @@ export default function Inventory() {
         </div>
       </div>
       {/* Add Stock Dialog */}
-      <Dialog open={isAddStockOpen} onOpenChange={setIsAddStockOpen}>
+      <Dialog open={isAddStockOpen} onOpenChange={(open) => {
+        setIsAddStockOpen(open);
+        if (!open) {
+          // Reset form state when dialog closes
+          setIsEditMode(false);
+          setEditingItem(null);
+          setFormData({
+            medicine_id: "",
+            batch_id: "",
+            quantity: "",
+            price: "",
+            manufacturing_date: "",
+            expiry_date: "",
+            supplier_id: "",
+          });
+          setSearchTerm("");
+          setShowMedicineDropdown(false);
+        }
+      }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>{isEditMode ? "Edit Inventory" : "Add New Stock"}</DialogTitle>
@@ -535,6 +585,8 @@ export default function Inventory() {
                   onFocus={() => setShowMedicineDropdown(true)}
                   placeholder="Search by name, barcode, or manufacturer..."
                   required={!formData.medicine_id}
+                  disabled={isEditMode}
+                  className={isEditMode ? "bg-slate-100 cursor-not-allowed" : ""}
                 />
                 {showMedicineDropdown && searchTerm && (
                   <div className="absolute z-10 w-full mt-1 bg-white border border-slate-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
@@ -576,7 +628,12 @@ export default function Inventory() {
                 onChange={(e) => setFormData({ ...formData, batch_id: e.target.value })}
                 placeholder="e.g. BATCH001"
                 required
+                disabled={isEditMode}
+                className={isEditMode ? "bg-slate-100 cursor-not-allowed" : ""}
               />
+              {isEditMode && (
+                <p className="text-xs text-slate-500">Batch ID cannot be changed when editing</p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -650,9 +707,12 @@ export default function Inventory() {
             <Button
               type="submit"
               className="w-full bg-emerald-600 hover:bg-emerald-700"
-              disabled={addStockMutation.isPending}
+              disabled={addStockMutation.isPending || updateInventoryMutation.isPending}
             >
-              {addStockMutation.isPending ? "Adding..." : "Add Stock"}
+              {isEditMode 
+                ? (updateInventoryMutation.isPending ? "Updating..." : "Update Inventory")
+                : (addStockMutation.isPending ? "Adding..." : "Add Stock")
+              }
             </Button>
           </form>
         </DialogContent>

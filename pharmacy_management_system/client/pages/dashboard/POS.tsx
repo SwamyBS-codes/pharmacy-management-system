@@ -4,6 +4,7 @@ import { Search, Plus, Trash2, Pill, User, CreditCard, Receipt, Download, Printe
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { api } from "@/lib/api";
 import {
   Dialog,
   DialogContent,
@@ -170,28 +171,25 @@ export default function POS() {
         }
       }
 
-      const response = await fetch("/api/sales", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          customer_id: finalCustomerId || null,
-          items,
-          payment_method: paymentMethod,
-          payment_status: "paid",
-          discount_amount: discount,
-          notes: notes || null,
-        }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "Failed to process sale");
+      const token = localStorage.getItem("auth_token");
+      if (!token) {
+        throw new Error("Authentication required. Please log in again.");
       }
 
-      return response.json();
+      const response = await api.sales.create({
+        customer_id: finalCustomerId || null,
+        items,
+        payment_method: paymentMethod,
+        payment_status: "paid",
+        discount_amount: discount,
+        notes: notes || null,
+      });
+
+      return response.data;
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setLastSale(data);
+      console.log("✅ Sale completed, refetching dashboards...");
       toast.success(`Sale completed! Invoice: ${data.invoice_number}`);
       setCart([]);
       setCheckoutOpen(false);
@@ -201,8 +199,30 @@ export default function POS() {
       setDiscount(0);
       setNotes("");
       setInvoiceDialogOpen(true);
+      
+      // First invalidate to mark as stale, then refetch to get new data
+      console.log("📡 Invalidating cache...");
       queryClient.invalidateQueries({ queryKey: ["medicines"] });
       queryClient.invalidateQueries({ queryKey: ["sales"] });
+      queryClient.invalidateQueries({ queryKey: ["sales-stats-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["sales-report"] });
+      queryClient.invalidateQueries({ queryKey: ["sales-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      
+      console.log("📡 Refetching queries...");
+      try {
+        const results = await Promise.all([
+          queryClient.refetchQueries({ queryKey: ["medicines"], type: "all" }),
+          queryClient.refetchQueries({ queryKey: ["sales"], type: "all" }),
+          queryClient.refetchQueries({ queryKey: ["sales-stats-dashboard"], type: "all" }),
+          queryClient.refetchQueries({ queryKey: ["sales-report"], type: "all" }),
+          queryClient.refetchQueries({ queryKey: ["sales-stats"], type: "all" }),
+          queryClient.refetchQueries({ queryKey: ["dashboard-stats"], type: "all" }),
+        ]);
+        console.log("✅ All dashboard queries refetched successfully!", results);
+      } catch (error) {
+        console.error("❌ Error refetching queries:", error);
+      }
     },
     onError: (error: any) => {
       toast.error(error.message || "Failed to process sale");

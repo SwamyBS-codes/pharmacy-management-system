@@ -81,7 +81,7 @@ export default function Signup() {
       // Register pharmacy
       const response = await api.auth.registerPharmacy({
         pharmacy_name: formData.pharmacyName.trim(),
-        email: formData.email.trim(),
+        email: formData.email.trim().toLowerCase(),
         password: formData.password,
       });
 
@@ -99,10 +99,8 @@ export default function Signup() {
 
       console.log("Registration successful, redirecting...");
 
-      // Use window.location for reliable redirect
-      setTimeout(() => {
-        window.location.href = "/complete-profile";
-      }, 100);
+      // Navigate to complete profile
+      navigate("/complete-profile", { replace: true });
     } catch (err: any) {
       console.error("Registration error:", err);
       const errorMessage =
@@ -241,6 +239,9 @@ export default function Signup() {
                     )}
                   </button>
                 </div>
+                <p className="text-xs text-slate-500 mt-2">
+                  💡 Passwords are case-sensitive. Remember the exact uppercase and lowercase letters you use here.
+                </p>
 
                 {/* Password Requirements */}
                 <div className="mt-3 space-y-2">
@@ -284,6 +285,9 @@ export default function Signup() {
                   className="w-full px-4 py-3 rounded-lg border border-slate-300 bg-white text-slate-900 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
                   required
                 />
+                <p className="text-xs text-slate-500 mt-2">
+                  ✓ Must match the password above exactly (same case)
+                </p>
               </div>
 
               {/* Terms */}

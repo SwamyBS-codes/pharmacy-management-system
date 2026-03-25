@@ -38,8 +38,16 @@ export default function CompleteProfile() {
             const { api } = await import("@/lib/api");
             await api.auth.completeProfile(formData);
 
-            // Force redirect using window.location for reliability
-            window.location.href = "/dashboard";
+            // Update user data in localStorage
+            const storedUser = localStorage.getItem("user");
+            if (storedUser) {
+                const user = JSON.parse(storedUser);
+                user.is_profile_complete = true;
+                localStorage.setItem("user", JSON.stringify(user));
+            }
+
+            // Navigate to dashboard
+            navigate("/dashboard", { replace: true });
         } catch (err: any) {
             setError(err.response?.data?.error || "Failed to complete profile. Please try again.");
             setLoading(false);

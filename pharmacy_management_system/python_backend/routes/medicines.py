@@ -1,10 +1,7 @@
-"""
-Medicines API Routes
-Handles medicine management with search, filtering, and barcode lookup
-"""
 from flask import Blueprint, request, jsonify
 from db import execute_query
 import logging
+from middleware import require_role
 
 logger = logging.getLogger(__name__)
 medicines_bp = Blueprint('medicines', __name__)
@@ -115,10 +112,20 @@ def get_manufacturers():
         return jsonify({'error': 'Failed to fetch manufacturers'}), 500
 
 @medicines_bp.route('/', methods=['POST'])
+@require_role('ADMIN')
 def create_medicine():
     """Create new medicine"""
     try:
         data = request.get_json()
+        
+        # Validate stock is positive
+        stock = data.get('stock', 0)
+        try:
+            stock = int(stock)
+            if stock < 0:
+                return jsonify({'error': 'Stock must be a positive value (0 or greater)'}), 400
+        except (ValueError, TypeError):
+            return jsonify({'error': 'Stock must be a valid number'}), 400
         
         # Generate barcode if not provided
         barcode = data.get('barcode')
@@ -160,10 +167,20 @@ def create_medicine():
         return jsonify({'error': 'Failed to create medicine'}), 500
 
 @medicines_bp.route('/<int:medicine_id>', methods=['PUT'])
+@require_role('ADMIN')
 def update_medicine(medicine_id):
     """Update medicine"""
     try:
         data = request.get_json()
+        
+        # Validate stock is positive if provided
+        if 'stock' in data and data['stock'] is not None:
+            try:
+                stock = int(data['stock'])
+                if stock < 0:
+                    return jsonify({'error': 'Stock must be a positive value (0 or greater)'}), 400
+            except (ValueError, TypeError):
+                return jsonify({'error': 'Stock must be a valid number'}), 400
         
         query = """
             UPDATE medicines SET
@@ -210,6 +227,7 @@ def update_medicine(medicine_id):
         return jsonify({'error': 'Failed to update medicine'}), 500
 
 @medicines_bp.route('/<int:medicine_id>', methods=['DELETE'])
+@require_role('ADMIN')
 def delete_medicine(medicine_id):
     """Delete medicine"""
     try:

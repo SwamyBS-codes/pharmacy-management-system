@@ -112,9 +112,9 @@ export default function BackgroundPharmaScene({ className }: { className?: strin
         gl={{ powerPreference: 'high-performance', antialias: false }}
         camera={{ position: [0, 0, 6], fov: 55 }}
       >
-        <ambientLight intensity={0.2} />
-        <directionalLight position={[3, 2, 5]} intensity={0.7} />
-        <Environment preset="sunset" />
+        <ambientLight intensity={0.3} />
+        <directionalLight position={[3, 2, 5]} intensity={0.8} />
+        <pointLight position={[-3, 3, -3]} intensity={0.5} />
         <FloatingPills />
       </Canvas>
       {/* Soft gradient overlay to keep background subtle */}

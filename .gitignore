@@ -23,12 +23,12 @@ dist-ssr
 *.sln
 *.sw?
 .venv
-.python_backend/venv/*
+backend/venv/*
 .config/
 !.env
 
 # Supabase deployment files
 .env.supabase
 supabase_migration/
-python_backend/supabase_migration/
+backend/supabase_migration/
 

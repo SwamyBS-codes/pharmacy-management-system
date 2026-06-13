@@ -1,0 +1,26 @@
+# Python Backend Requirements
+# Flask and extensions
+Flask==3.0.0
+flask-cors==4.0.0
+python-dotenv==1.0.0
+
+# Database
+psycopg2-binary==2.9.12
+
+# Authentication and Security
+bcrypt==4.1.2
+PyJWT==2.8.0
+
+# PDF Generation (for invoices)
+reportlab==4.0.7
+Pillow==12.2.0
+
+# Utilities
+python-dateutil==2.8.2
+
+# Machine Learning and Data Science
+joblib==1.5.3
+scikit-learn==1.7.2
+pandas==3.0.3
+numpy==2.4.6
+scipy>=1.8.0

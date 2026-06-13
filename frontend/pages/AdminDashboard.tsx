@@ -30,8 +30,6 @@ import {
   ScanLine,
   Brain,
 } from "lucide-react";
-import GlassBrain from "@/components/GlassBrain";
-import BackgroundPharmaScene from "@/components/BackgroundPharmaScene";
 
 export default function AdminDashboard() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -97,13 +95,7 @@ export default function AdminDashboard() {
   const { data: salesStats, isLoading: isLoadingSalesStats, refetch: refetchSalesStats } = useQuery({
     queryKey: ["sales-stats-dashboard"],
     queryFn: async () => {
-      console.log("📡 Fetching sales stats from API...");
       const response = await api.sales.getStatsSummary();
-      console.log("📊 Sales stats received:", {
-        dailySalesCount: response.data?.dailySales?.length,
-        topMedsCount: response.data?.topMedicines?.length,
-        firstDailySale: response.data?.dailySales?.[0]
-      });
       return response.data;
     },
     staleTime: 0,
@@ -122,29 +114,15 @@ export default function AdminDashboard() {
     return dayStr === todayStr;
   });
   const todaySales = todayData ? Number(todayData.sales || 0) : 0;
+  const sortedDailyData = [...dailyData].sort(
+    (a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()
+  );
+  const recentSales = sortedDailyData.slice(-7);
 
-  // Log when data changes
-  console.log("💾 AdminDashboard data updated:", {
-    todayStr: todayStr,
-    dailySalesCount: dailyData.length,
-    firstDailySale: dailyData[0],
-    todayData: todayData,
-    todaySales: todaySales,
-    topMedsCount: topMeds.length
-  });
-
-  // Force re-render when salesStats changes
-  useEffect(() => {
-    console.log("🔄 useEffect: Sales stats changed, component will re-render");
-    return () => {
-      console.log("🔄 useEffect cleanup");
-    };
-  }, [salesStats, dailyData, todaySales]);
-
+  const formatCurrency = (amount: number) => `₹${Number(amount || 0).toLocaleString()}`;
 
   return (
-    <div className="min-h-screen bg-slate-100 flex relative overflow-hidden">
-      <BackgroundPharmaScene className="absolute inset-0 -z-10 opacity-[0.85]" />
+    <div className="min-h-screen bg-slate-50 flex relative overflow-hidden">
       {/* Sidebar */}
       <aside
         className={`${sidebarOpen ? "w-64" : "w-20"
@@ -230,23 +208,56 @@ export default function AdminDashboard() {
             <p className="text-slate-600 mt-1">Welcome back to PharmaCare</p>
           </div>
 
-          {/* 3D Glassy Brain Animation */}
           <div className="mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex items-center">
-              <div className="space-y-2">
-                <h3 className="font-semibold text-slate-900">AI Insights Preview</h3>
-                <p className="text-sm text-slate-600">
-                  Interactive 3D visualization showcasing neural intelligence powering predictions.
-                </p>
-                <Link to="/dashboard/predictions">
-                  <Button className="mt-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white">
-                    Explore Predictions
-                  </Button>
-                </Link>
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="font-semibold text-slate-900">Sales & Inventory Summary</h3>
+                  <p className="text-sm text-slate-600 mt-1">
+                    Real-time selling values, inventory health, and revenue performance.
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-4">
+                <div className="rounded-xl border border-slate-200 p-4 bg-slate-50">
+                  <p className="text-sm text-slate-500">Today's Sales</p>
+                  <p className="text-2xl font-semibold text-slate-900 mt-2">{formatCurrency(todaySales)}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 p-4 bg-slate-50">
+                  <p className="text-sm text-slate-500">This Month's Sales</p>
+                  <p className="text-2xl font-semibold text-slate-900 mt-2">{formatCurrency(monthlySales)}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 p-4 bg-slate-50">
+                  <p className="text-sm text-slate-500">Active Medicines</p>
+                  <p className="text-2xl font-semibold text-slate-900 mt-2">{totalMedicines.toLocaleString()}</p>
+                </div>
               </div>
             </div>
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-2">
-              <GlassBrain className="h-[280px] w-full" />
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="font-semibold text-slate-900">Last 7 Days Selling Values</h3>
+                  <p className="text-sm text-slate-600 mt-1">Actual sales revenue for recent days.</p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {recentSales.length === 0 ? (
+                  <p className="text-sm text-slate-500">No sales data available yet.</p>
+                ) : (
+                  recentSales.map((item: any) => {
+                    const dateLabel = item.date ? new Date(item.date).toLocaleDateString() : "Unknown";
+                    return (
+                      <div key={dateLabel} className="flex items-center justify-between rounded-xl border border-slate-200 p-3 bg-slate-50">
+                        <div>
+                          <p className="text-sm font-medium text-slate-900">{dateLabel}</p>
+                          <p className="text-xs text-slate-500">Sales count: {item.count ?? item.transactions ?? "—"}</p>
+                        </div>
+                        <p className="text-lg font-semibold text-slate-900">{formatCurrency(Number(item.sales || item.amount || 0))}</p>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
           </div>
 

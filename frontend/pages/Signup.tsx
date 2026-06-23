@@ -67,12 +67,8 @@ export default function Signup() {
       const checkResponse = await api.auth.checkPharmacy();
 
       if (checkResponse.data.exists) {
-        setError("A pharmacy is already registered. Only one pharmacy allowed per system.");
+        setError("A pharmacy is already registered. Only one pharmacy allowed per system. Please sign in with your existing account.");
         setLoading(false);
-        // Redirect to login since registration is blocked
-        setTimeout(() => {
-          navigate("/login", { replace: true });
-        }, 1000);
         return;
       }
 

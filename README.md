@@ -7,19 +7,20 @@ This repository is a modular monorepo containing both the Flask Python backend, 
 New here? This README gets you from a fresh clone to a running application configured for local development and testing.
 
 ## Table of contents
-- Tech stack
-- Architecture
-- Prerequisites
-- Getting started
-- Environment variables
-- Running the app
-- Project structure
-- Modules
-- Authentication & authorization
-- Testing (Local Development)
-- Scripts reference
-- Coding conventions
-- Troubleshooting
+
+- [Tech stack](#tech-stack)
+- [Architecture](#architecture)
+- [Prerequisites](#prerequisites)
+- [Getting started](#getting-started)
+- [Environment variables](#environment-variables)
+- [Running the app](#running-the-app)
+- [Project structure](#project-structure)
+- [Modules](#modules)
+- [Authentication & authorization](#authentication--authorization)
+- [Testing (Local Development)](#testing-local-development)
+- [Scripts reference](#scripts-reference)
+- [Coding conventions](#coding-conventions)
+- [Troubleshooting](#troubleshooting)
 
 ## Tech stack
 | Area | Technology |

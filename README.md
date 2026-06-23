@@ -17,7 +17,6 @@ New here? This README gets you from a fresh clone to a running application confi
 - Modules
 - Authentication & authorization
 - Testing (Local Development)
-- Deployment (Planned / Future Production)
 - Scripts reference
 - Coding conventions
 - Troubleshooting
@@ -192,19 +191,6 @@ The project includes test configurations to run locally during development:
   ```bash
   npm run test
   ```
-
-## Deployment (Planned / Future Production)
-Currently, this application runs entirely in a local environment. When ready for production deployment, the following setups are recommended:
-- **Backend**: Can be deployed to hosting services (e.g., Render, AWS Elastic Beanstalk) or run containerized inside Docker using a WSGI server like Gunicorn:
-  ```bash
-  gunicorn -w 4 -b 0.0.0.0:5000 "src.app:create_app()"
-  ```
-- **Frontend**: Can be compiled to optimized static assets and hosted on CDNs (e.g., Vercel, Netlify) or served via the production Node host script:
-  ```bash
-  npm run build
-  npm run start
-  ```
-
 ## Scripts reference
 ### Backend Scripts
 | Script | Purpose |
